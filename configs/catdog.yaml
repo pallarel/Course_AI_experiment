@@ -1,0 +1,9 @@
+model:
+  model_builder: SimpleCNNPredictor
+  train:
+    learning_rate: 0.01
+    max_epoch: 100
+    batch_size: 32
+    validation_freq: 2
+dataset:
+  target_size: 256
