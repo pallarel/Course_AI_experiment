@@ -1,9 +1,9 @@
 model:
-  model_builder: SimpleCNNPredictor
+  model_builder: EfficientNetWrapper
   train:
     learning_rate: 0.001
     max_epoch: 100
     batch_size: 32
     validation_freq: 2
 dataset:
-  target_size: 256
+  target_size: 224

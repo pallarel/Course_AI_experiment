@@ -46,8 +46,7 @@ class SimpleCNNPredictor(nn.Module):
         self.last_layer = nn.Sequential(
             nn.AvgPool2d(kernel_size=2),
             nn.Flatten(),
-            nn.Linear(in_features=current_channel * (current_size//2)**2, out_features=output_dim),
-            nn.Softmax(dim=0)
+            nn.Linear(in_features=current_channel * (current_size//2)**2, out_features=output_dim)
         )
 
         self.apply(init_weights)
@@ -60,5 +59,28 @@ class SimpleCNNPredictor(nn.Module):
         return x
 
 
-def SimpleClassifier(num_classes) -> torchvision.models.GoogLeNet:
-    return torchvision.models.googlenet(num_classes=num_classes)
+class EfficientNetPredictor(nn.Module):
+    def __init__(self, input_size, input_channel, output_dim):
+        assert input_size == 224 and input_channel == 3
+        super().__init__()
+        
+        self.main_model = torchvision.models.efficientnet_b0()
+
+        self.last_connection = nn.Linear(1000, output_dim)
+    
+    def forward(self, x):
+        
+        return x
+
+    #def forward(self, x):
+        #x = self.main_model(x)
+        #for i, layer in enumerate(self.network):
+        #    x = layer(x)
+        #x = self.last_layer(x)
+        #return x
+    
+
+
+def EfficientNetWrapper(input_size, input_channel, output_dim) -> torchvision.models.EfficientNet:
+    assert input_size == 224 and input_channel == 3
+    return torchvision.models.efficientnet_b0(num_classes=output_dim)

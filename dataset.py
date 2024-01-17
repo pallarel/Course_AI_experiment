@@ -22,7 +22,8 @@ class CatDogDataset(Dataset):
         self.target_size = size
 
         self.transforms = tvtrans.Compose([
-           tvtrans.Resize((size, size), interpolation=tvtrans.InterpolationMode.BILINEAR, antialias=True)
+            tvtrans.RandomResizedCrop((size, size), interpolation=tvtrans.InterpolationMode.BILINEAR, antialias=True)
+            #tvtrans.Resize((size, size), interpolation=tvtrans.InterpolationMode.BILINEAR, antialias=True)
         ])
 
         for data_path in data_paths:

@@ -174,11 +174,28 @@ class ModelRunner():
     def testing_setup(self):
         self.dataset = CatDogDataset(self.data_paths, self.target_size)
 
+    def save_configuration(self):
+        cur_exp_config = {
+            'data_paths': self.data_paths,
+            'config_path': self.config_path,
+            'config_details': self.config_details,
+        }
+        cur_data_config = {
+            'data_augmentations': {
+                'transforms': self.train_dataset.transforms
+            }
+        }
+        with open(os.path.join(self.exp_path, 'snapshot.yaml'), 'w') as outfile:
+            yaml.dump(cur_exp_config, outfile, default_flow_style=False)
+        with open(os.path.join(self.exp_path, 'snapshot_dataset.yaml'), 'w') as outfile:
+            yaml.dump(cur_data_config, outfile, default_flow_style=False)
+
     def train(self):
         assert(self.mode == 'train')
         if self.last_iter_count > 0:
             print('Continue training from a previous checkpoint.')
         self.training_setup()
+        self.save_configuration()
         self.model.train()
         train_dataloader = DataLoader(dataset=self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=8, pin_memory=True)
         val_dataloader = DataLoader(dataset=self.val_dataset, batch_size=self.batch_size, shuffle=True, num_workers=8, pin_memory=True)
@@ -199,7 +216,7 @@ class ModelRunner():
                 predict = self.model(image_sample)
 
                 # loss
-                loss = nn.CrossEntropyLoss(reduction='sum')(label_sample, predict)
+                loss = nn.CrossEntropyLoss(reduction='sum')(predict, label_sample)
                 train_loss += loss.item()
                 # only take the average on the batch dimension
                 loss /= cur_batch
@@ -237,7 +254,7 @@ class ModelRunner():
                         val_image_sample, val_label_sample = sample['image'].to(self.device), sample['label'].to(self.device)
                         val_predict = self.model(val_image_sample)
 
-                        loss = nn.CrossEntropyLoss(reduction='sum')(val_label_sample, val_predict)
+                        loss = nn.CrossEntropyLoss(reduction='sum')(val_predict, val_label_sample)
                         val_loss += loss.item()
 
                         correct_count += torch.sum(torch.argmax(val_predict, dim=1) == torch.argmax(val_label_sample, dim=1)).item()
@@ -259,17 +276,18 @@ class ModelRunner():
         tqdm.write('Complete training.')
 
     @torch.no_grad()
-    def predict(self, data: np.ndarray) -> np.ndarray:
+    def predict(self, data: np.ndarray) -> Union[int, Sequence[int]]:
         self.model.eval()
 
-        if len(data.shape) == 2:
-            data = data[None, None, ...]
-        elif len(data.shape) == 3:
-            data = data[:, None, ...]
+        if len(data.shape) == 3:
+            data = data[None, ...]
 
         data = torch.tensor(data, dtype=torch.float32, device=self.device)
-        predicted = self.model(data).cpu().numpy()
-        return predicted
+        predicted : np.ndarray = self.model(data).cpu().numpy().tolist()
+        predicted = np.argmax(predicted, axis=-1)
+        predicted_list = predicted.tolist()
+        
+        return predicted_list
 
     @torch.no_grad()
     def test(self):
@@ -291,7 +309,7 @@ class ModelRunner():
             cur_batch = image_sample.shape[0]
             predict = self.model(image_sample)
 
-            loss = nn.CrossEntropyLoss(reduction='sum')(label_sample, predict)
+            loss = nn.CrossEntropyLoss(reduction='sum')(predict, label_sample)
             test_loss += loss.item()
 
             correct_count += torch.sum(torch.argmax(predict, dim=1) == torch.argmax(label_sample, dim=1)).item()
@@ -328,6 +346,9 @@ if __name__ == '__main__':
 
     args.data_paths = ['../data1/train/cat', '../data1/train/dog']
     args.val_data_paths = ['../data1/test/cat', '../data1/test/dog']
+    args.exp_name = 'test_exp_2'
+    args.config_path = 'configs/catdog_another.yaml'
+    args.device = 'cpu'
 
     runner = ModelRunner(
         exp_name=args.exp_name, 
