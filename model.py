@@ -59,17 +59,27 @@ class SimpleCNNPredictor(nn.Module):
         return x
 
 
-class EfficientNetPredictor(nn.Module):
+class EfficientNetPretrained(nn.Module):
     def __init__(self, input_size, input_channel, output_dim):
         assert input_size == 224 and input_channel == 3
         super().__init__()
         
-        self.main_model = torchvision.models.efficientnet_b0()
+        self.main_model = torchvision.models.efficientnet_b7(weights=torchvision.models.EfficientNet_B7_Weights.DEFAULT)
 
-        self.last_connection = nn.Linear(1000, output_dim)
+        self.last_connection = nn.Sequential(
+            nn.Linear(1000, 100), 
+            nn.ReLU(inplace=True), 
+            nn.Linear(100, output_dim)
+        )
+
+        self.last_connection.apply(init_weights)
+        
     
     def forward(self, x):
-        
+        with torch.no_grad():
+            x = self.main_model(x)
+
+        x = self.last_connection(x)
         return x
 
     #def forward(self, x):

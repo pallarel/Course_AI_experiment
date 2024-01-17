@@ -89,6 +89,8 @@ class ModelRunner():
             self.model_save_freq = None
 
         self.model_builder = config_yaml['model']['model_builder']
+        #self.train_dataset_builder = config_yaml['dataset']['train_dataset_builder']
+        #self.test_dataset_builder = config_yaml['dataset']['test_dataset_builder']
 
         print('Use wandb: ', self.use_wandb)
         
@@ -142,7 +144,7 @@ class ModelRunner():
 
         elif self.val_data_paths is not None:
             self.train_dataset = CatDogDataset(self.data_paths, self.target_size)
-            self.val_dataset = CatDogDataset(self.val_data_paths, self.target_size)
+            self.val_dataset = CatDogTestDataset(self.val_data_paths, self.target_size)
 
         # No validation
         else:
@@ -172,7 +174,7 @@ class ModelRunner():
             self.writer = SummaryWriter(log_dir=os.path.join(self.exp_path, 'logs'))
 
     def testing_setup(self):
-        self.dataset = CatDogDataset(self.data_paths, self.target_size)
+        self.dataset = CatDogTestDataset(self.data_paths, self.target_size)
 
     def save_configuration(self):
         cur_exp_config = {
@@ -286,6 +288,9 @@ class ModelRunner():
         predicted : np.ndarray = self.model(data).cpu().numpy().tolist()
         predicted = np.argmax(predicted, axis=-1)
         predicted_list = predicted.tolist()
+
+        if len(predicted_list) == 1:
+            return predicted_list[0]
         
         return predicted_list
 
@@ -344,11 +349,9 @@ if __name__ == '__main__':
 
     mp.set_start_method('spawn', force=True)
 
-    args.data_paths = ['../data1/train/cat', '../data1/train/dog']
-    args.val_data_paths = ['../data1/test/cat', '../data1/test/dog']
-    args.exp_name = 'test_exp_2'
+    args.data_paths = ['data/train/cat', 'data/train/dog']
+    args.val_data_paths = ['data/test/cat', 'data/test/dog']
     args.config_path = 'configs/catdog_another.yaml'
-    args.device = 'cpu'
 
     runner = ModelRunner(
         exp_name=args.exp_name, 
