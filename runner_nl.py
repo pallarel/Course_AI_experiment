@@ -265,7 +265,7 @@ class ModelRunner():
             if iter_bar:
                 iter_bar.update(cur_batch)
                 if mode == 'train':
-                    iter_bar.set_description('[epoch:{}, lr:{}]'.format(epoch, self.optimizer.param_groups[0]['lr']))
+                    iter_bar.set_description('[epoch:{}, lr:{:.6f}]'.format(epoch, self.optimizer.param_groups[0]['lr']))
         
         return total_loss, correct_count
 
