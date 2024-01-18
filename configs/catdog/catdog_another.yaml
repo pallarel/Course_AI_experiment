@@ -2,12 +2,11 @@ model:
   model_builder: EfficientNetPretrained
   train:
     learning_rate: 1.0e-4
-    warm_up:
-      learning_rate_final: 1.0e-3
-      warm_up_end: 3000
     max_epoch: 100
     batch_size: 32
     validation_freq: 2
     model_save_freq: 20
 dataset:
   target_size: 224
+  train_dataset_builder: CatDogDataset
+  test_dataset_builder: CatDogTestDataset

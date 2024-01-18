@@ -22,7 +22,7 @@ class CatDogDataset(Dataset):
         self.target_size = size
 
         self.transforms = tvtrans.Compose([
-            tvtrans.RandomResizedCrop((size, size), interpolation=tvtrans.InterpolationMode.BILINEAR), 
+            tvtrans.RandomResizedCrop((size, size), interpolation=tvtrans.InterpolationMode.BILINEAR, antialias=True), 
             tvtrans.RandomHorizontalFlip(p=0.5)
             #tvtrans.Resize((size, size), interpolation=tvtrans.InterpolationMode.BILINEAR, antialias=True)
         ])
@@ -90,42 +90,50 @@ class CatDogTestDataset(Dataset):
         return sample
 
 
-def NewsTitleDataset(Dataset):
-    import pandas as pd
+
+class ChineseTitleDataset(Dataset):
+    
     def __init__(self, data_paths):
-        self.images_dir_list = []
+        from transformers import BertTokenizer
+        import pandas as pd
+        
+        self.sentence_data = []
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
 
         for data_path in data_paths:
-            current_dir_list = sorted(glob(os.path.join(data_path, '*.jpg')))
-            self.images_dir_list += current_dir_list
-            print('Found {} sample images in directory "{}".'.format(len(current_dir_list), data_path))
+            df = pd.read_excel(data_path)
+
+            for index, row in df.iterrows():
+                texts = row['数据']
+                label = row['标签']
+                label = [1, 0] if label == 0 else [0, 1]
+                sample = {'seq': texts, 'label': label}
+                encoding = self.tokenizer(texts, padding="max_length", truncation=True, max_length=30)  
+                
+                tokens = encoding['input_ids']
+                mask = encoding['attention_mask']
+                sample['tokens'] = tokens
+                sample['mask'] = mask
+
+                self.sentence_data.append(sample)
+
+        print('Found {} samples.'.format(len(self.sentence_data)))
 
     def __len__(self) -> int:
-        return len(self.images_dir_list)
+        return len(self.sentence_data)
     
-    def __getitem__(self, index) -> dict[Literal['image', 'label'], Any]:
-        image_dir : str = self.images_dir_list[index]
-        image_dir = image_dir.replace('\\', '/')
-        image_type = image_dir.split('/')[-1].split('.')[0]
-
-        image = cv2.imread(image_dir)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) / 255
-        image = image.transpose(-1, 0, 1)
-        image = torch.tensor(image, dtype=torch.float32, device='cpu')
-
-        image = self.transforms(image)
-        
-        label = torch.tensor([1, 0]) if image_type == 'cat' else torch.tensor([0, 1])
-        label = label.to(device='cpu', dtype=torch.float32)
-
-        sample = {'image': image, 'label': label}
+    def __getitem__(self, index) -> dict[Literal['seq', 'tokens', 'mask', 'label'], Any]:
+        sample = self.sentence_data[index]
+        sample['tokens'] = torch.tensor(sample['tokens'], device='cpu')
+        sample['mask'] = torch.tensor(sample['mask'], dtype=torch.bool, device='cpu')
+        sample['label'] = torch.tensor(sample['label'], dtype=torch.float32, device='cpu')
         return sample
 
 
 if __name__ == '__main__':
 
-    def _dataset_test():
-        dataset = CatDogDataset(['data/train/cat', 'data/train/dog'], 224)
+    def _dataset_catdog_test():
+        dataset = CatDogDataset(['data/catdog/train/cat', 'data/catdog/train/dog'], 224)
 
         dataloader = DataLoader(dataset=dataset, batch_size=1, shuffle=True)
         if(len(dataloader) > 20):
@@ -144,7 +152,25 @@ if __name__ == '__main__':
             #break
             if i >= 20:
                 break
+                
+    def _dataset_chinese_test():
+        dataset = ChineseTitleDataset(['data/chinese/train.xlsx'])
+
+        dataloader = DataLoader(dataset=dataset, batch_size=1, shuffle=True)
+        if(len(dataloader) > 20):
+            print('Will only take the first 20 samples.')
+        for i, sample in enumerate(dataloader):
+            sample_seq = sample['seq'][0]
+            sample_label = sample['label'].cpu().numpy()[0]
+            sample_tokens = sample['tokens'].cpu().numpy()[0]
+            sample_mask = sample['mask'].cpu().numpy()[0]
+            
+            print(f'[{sample_label}]  seq: {sample_seq}, tokens: {sample_tokens}, mask: {sample_mask},   [{sample_tokens.shape}|{sample_mask.shape}]')
+
+            #break
+            if i >= 20:
+                break
 
 
-    _dataset_test()
-    #_image_data_test()
+    #_dataset_catdog_test()
+    _dataset_chinese_test()

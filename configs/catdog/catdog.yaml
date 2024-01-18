@@ -8,3 +8,5 @@ model:
     model_save_freq: 20
 dataset:
   target_size: 256
+  train_dataset_builder: CatDogDataset
+  test_dataset_builder: CatDogTestDataset

@@ -18,13 +18,41 @@ from torch.utils.data import random_split
 import torch.multiprocessing as mp
 
 from dataset import *
-from model import *
+from model_nl import *
 
 from torch.utils.tensorboard import SummaryWriter
 try:
     import wandb
 except:
     pass
+
+
+
+class NoamOpt:  
+    """
+    Implement rate in 'Attention is all Your Need'
+    """
+    def __init__(self, optimizer, d_model, warmup, factor=1):  
+        self.optimizer = optimizer  
+        self._step = 0  
+        self.warmup = warmup  
+        self.factor = factor  
+        self.model_size = d_model  
+        self._rate = 0  
+          
+    def step(self):  
+        self._step += 1  
+        rate = self.rate()  
+        for p in self.optimizer.param_groups:  
+            p['lr'] = rate  
+        self._rate = rate  
+        self.optimizer.step()  
+          
+    def rate(self, step = None):
+        if step is None:  
+            step = self._step  
+        return self.factor * (self.model_size ** (-0.5) * min(step ** (-0.5), step * self.warmup ** (-1.5)))  
+
 
 
 
@@ -68,11 +96,12 @@ class ModelRunner():
                 config_yaml = config_yaml['config_details']
 
 
-        self.target_size = self.check_config(config_yaml, 'dataset', 'target_size', assertion=True)
+        self.seq_pad_length = self.check_config(config_yaml, 'dataset', 'seq_pad_length', assertion=True)
 
         self.validation_proportion = self.check_config(config_yaml, 'dataset', 'validation_proportion')
 
         self.learning_rate = self.check_config(config_yaml, 'model', 'train', 'learning_rate', assertion=True)
+        self.warmup_steps = self.check_config(config_yaml, 'model', 'train', 'warmup_steps', assertion=True)
 
         self.max_epoch = self.check_config(config_yaml, 'model', 'train', 'max_epoch', assertion=True)
 
@@ -87,7 +116,7 @@ class ModelRunner():
 
         print('Use wandb: ', self.use_wandb)
         
-        self.model = globals()[self.model_builder](input_size=self.target_size, input_channel=3, num_classes=2).to(self.device)
+        self.model = globals()[self.model_builder](seq_pad_length=self.seq_pad_length, num_classes=2, d_model=768).to(self.device)
         total_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         print('Total parameters: {}'.format(total_params))
         
@@ -143,7 +172,7 @@ class ModelRunner():
     def training_setup(self):
 
         if self.validation_proportion is not None:
-            self.dataset = globals()[self.train_dataset_builder](self.data_paths, self.target_size)
+            self.dataset = globals()[self.train_dataset_builder](self.data_paths)
             # split the full dataset into train and validation
             val_size = int(self.validation_proportion * len(self.dataset))
             train_size = len(self.dataset) - val_size
@@ -152,15 +181,17 @@ class ModelRunner():
             self.train_dataset, self.val_dataset = random_split(self.dataset, [train_size, val_size], self.generator)
 
         elif self.val_data_paths is not None:
-            self.train_dataset = globals()[self.train_dataset_builder](self.data_paths, self.target_size)
-            self.val_dataset = globals()[self.test_dataset_builder](self.val_data_paths, self.target_size)
+            self.train_dataset = globals()[self.train_dataset_builder](self.data_paths)
+            self.val_dataset = globals()[self.test_dataset_builder](self.val_data_paths)
 
         # No validation
         else:
-            self.train_dataset = globals()[self.train_dataset_builder](self.data_paths, self.target_size)
+            self.train_dataset = globals()[self.train_dataset_builder](self.data_paths)
             self.val_dataset = None
 
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, betas=(0.9, 0.98), eps=1e-9)
+
+        self.scheduler = NoamOpt(self.optimizer, d_model=768, warmup=self.warmup_steps)
 
         self.load_training_states()
         #self.lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, )
@@ -191,15 +222,8 @@ class ModelRunner():
             'config_path': self.config_path,
             'config_details': self.config_details,
         }
-        cur_data_config = {
-            'data_augmentations': {
-                'transforms': self.train_dataset.transforms
-            }
-        }
         with open(os.path.join(self.exp_path, 'snapshot.yaml'), 'w') as outfile:
             yaml.dump(cur_exp_config, outfile, default_flow_style=False)
-        with open(os.path.join(self.exp_path, 'snapshot_dataset.yaml'), 'w') as outfile:
-            yaml.dump(cur_data_config, outfile, default_flow_style=False)
 
 
     def full_iteration(
@@ -212,11 +236,11 @@ class ModelRunner():
         total_loss = 0.0
         correct_count = 0
         for i, sample in enumerate(it_dataloader):
-            image_sample, label_sample = sample['image'].to(self.device), sample['label'].to(self.device)
-            cur_batch = image_sample.shape[0]
+            tokens_sample, mask_sample, label_sample = sample['tokens'].to(self.device), sample['mask'].to(self.device), sample['label'].to(self.device)
+            cur_batch = tokens_sample.shape[0]
 
             # (N, 2)
-            predict = self.model(image_sample)
+            predict = self.model(tokens_sample, mask_sample)
 
             # loss
             loss = nn.CrossEntropyLoss(reduction='sum')(predict, label_sample)
@@ -231,6 +255,7 @@ class ModelRunner():
                 self.model.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+                self.scheduler.step()
                 self.iter_count += cur_batch
 
                 # log the training loss
