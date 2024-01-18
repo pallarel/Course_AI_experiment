@@ -33,11 +33,11 @@ class ModelRunner():
             self, 
             exp_name, 
             config_path, 
-            data_paths=None, 
-            val_data_paths=None,
+            data_paths = None, 
+            val_data_paths = None,
             device = 'cpu', 
             mode: Literal['train', 'test'] = 'train', 
-            use_wandb=False,
+            use_wandb = False,
             wandb_project_name = 'Test Project', 
         ) -> None:
 
@@ -94,7 +94,7 @@ class ModelRunner():
 
         print('Use wandb: ', self.use_wandb)
         
-        self.model = globals()[self.model_builder](input_size=self.target_size, input_channel=3, output_dim=2).to(self.device)
+        self.model = globals()[self.model_builder](input_size=self.target_size, input_channel=3, num_classes=2).to(self.device)
         total_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         print('Total parameters: {}'.format(total_params))
         
@@ -348,10 +348,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     mp.set_start_method('spawn', force=True)
-
-    args.data_paths = ['data/train/cat', 'data/train/dog']
-    args.val_data_paths = ['data/test/cat', 'data/test/dog']
-    args.config_path = 'configs/catdog_another.yaml'
 
     runner = ModelRunner(
         exp_name=args.exp_name, 

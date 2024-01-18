@@ -20,7 +20,7 @@ def init_weights(m):
         nn.init.constant_(m.bias, 0)
         
 class SimpleCNNPredictor(nn.Module):
-    def __init__(self, input_size, input_channel, output_dim):
+    def __init__(self, input_size, input_channel, num_classes):
         assert input_size > 32
         super().__init__()
         
@@ -46,7 +46,7 @@ class SimpleCNNPredictor(nn.Module):
         self.last_layer = nn.Sequential(
             nn.AvgPool2d(kernel_size=2),
             nn.Flatten(),
-            nn.Linear(in_features=current_channel * (current_size//2)**2, out_features=output_dim)
+            nn.Linear(in_features=current_channel * (current_size//2)**2, out_features=num_classes)
         )
 
         self.apply(init_weights)
@@ -60,7 +60,7 @@ class SimpleCNNPredictor(nn.Module):
 
 
 class EfficientNetPretrained(nn.Module):
-    def __init__(self, input_size, input_channel, output_dim):
+    def __init__(self, input_size, input_channel, num_classes):
         assert input_size == 224 and input_channel == 3
         super().__init__()
         
@@ -69,7 +69,7 @@ class EfficientNetPretrained(nn.Module):
         self.last_connection = nn.Sequential(
             nn.Linear(1000, 100), 
             nn.ReLU(inplace=True), 
-            nn.Linear(100, output_dim)
+            nn.Linear(100, num_classes)
         )
 
         self.last_connection.apply(init_weights)
@@ -91,6 +91,9 @@ class EfficientNetPretrained(nn.Module):
     
 
 
-def EfficientNetWrapper(input_size, input_channel, output_dim) -> torchvision.models.EfficientNet:
+def EfficientNetWrapper(input_size, input_channel, num_classes) -> torchvision.models.EfficientNet:
     assert input_size == 224 and input_channel == 3
-    return torchvision.models.efficientnet_b0(num_classes=output_dim)
+    return torchvision.models.efficientnet_b0(num_classes=num_classes)
+
+
+

@@ -90,41 +90,33 @@ class CatDogTestDataset(Dataset):
         return sample
 
 
-class CatDogSmallDataset(Dataset):
-    def __init__(self, data_paths, size):
-        self.images_list = []
-        self.label_list = []
-        self.target_size = size
-
-        self.transforms = tvtrans.Compose([
-            tvtrans.RandomResizedCrop((size, size), interpolation=tvtrans.InterpolationMode.BILINEAR)
-            #tvtrans.Resize((size, size), interpolation=tvtrans.InterpolationMode.BILINEAR, antialias=True)
-        ])
+def NewsTitleDataset(Dataset):
+    import pandas as pd
+    def __init__(self, data_paths):
+        self.images_dir_list = []
 
         for data_path in data_paths:
             current_dir_list = sorted(glob(os.path.join(data_path, '*.jpg')))
+            self.images_dir_list += current_dir_list
             print('Found {} sample images in directory "{}".'.format(len(current_dir_list), data_path))
-            for single_dir in current_dir_list:
-                image = cv2.imread(single_dir)
-                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) / 255
-                image = image.transpose(-1, 0, 1)
-
-                image_dir = single_dir.replace('\\', '/')
-                image_type = image_dir.split('/')[-1].split('.')[0]
-                label = [1, 0] if image_type == 'cat' else [0, 1]
-                
-                self.images_list.append(image)
-                self.label_list.append(label)
 
     def __len__(self) -> int:
-        return len(self.images_list)
+        return len(self.images_dir_list)
     
     def __getitem__(self, index) -> dict[Literal['image', 'label'], Any]:
-        image = torch.tensor(self.images_list[index], dtype=torch.float32, device='cpu')
+        image_dir : str = self.images_dir_list[index]
+        image_dir = image_dir.replace('\\', '/')
+        image_type = image_dir.split('/')[-1].split('.')[0]
+
+        image = cv2.imread(image_dir)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) / 255
+        image = image.transpose(-1, 0, 1)
+        image = torch.tensor(image, dtype=torch.float32, device='cpu')
 
         image = self.transforms(image)
         
-        label = torch.tensor(self.label_list[index], dtype=torch.float32, device='cpu')
+        label = torch.tensor([1, 0]) if image_type == 'cat' else torch.tensor([0, 1])
+        label = label.to(device='cpu', dtype=torch.float32)
 
         sample = {'image': image, 'label': label}
         return sample
