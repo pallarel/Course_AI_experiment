@@ -90,6 +90,21 @@ class CatDogTestDataset(Dataset):
         return sample
 
 
+class ChineseTitleTokenizer():
+    def __init__(self):
+        from transformers import BertTokenizer
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
+
+    def process(self, text: str) -> Sequence[torch.Tensor]:
+        encoding = self.tokenizer(text, padding="max_length", truncation=True, max_length=30)  
+        
+        tokens = encoding['input_ids']
+        mask = encoding['attention_mask']
+
+        tokens = torch.tensor(tokens, device='cpu')
+        mask = torch.tensor(mask, dtype=torch.bool, device='cpu')
+
+        return tokens, mask
 
 class ChineseTitleDataset(Dataset):
     

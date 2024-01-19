@@ -3,6 +3,8 @@ import torch.nn as nn
 import math
 import torchvision
 from transformers import BertModel
+from transformers import logging
+logging.set_verbosity_error()
 #from tokenizers import Tokenizer
 
 

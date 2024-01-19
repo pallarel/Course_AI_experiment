@@ -307,7 +307,7 @@ class ModelRunner():
             data = data[None, ...]
 
         data = torch.tensor(data, dtype=torch.float32, device=self.device)
-        predicted : np.ndarray = self.model(data).cpu().numpy().tolist()
+        predicted : np.ndarray = self.model(data).cpu().numpy()
         predicted = np.argmax(predicted, axis=-1)
         predicted_list = predicted.tolist()
 

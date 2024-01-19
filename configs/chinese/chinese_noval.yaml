@@ -1,11 +1,10 @@
 model:
   model_builder: TransformerClassifier
   train:
-    learning_rate: 1.0e-5
+    learning_rate: 5.0e-6
     warmup_steps: 4000
-    max_epoch: 20
+    max_epoch: 30
     batch_size: 32
-    validation_freq: 2
     model_save_freq: 10
 dataset:
   seq_pad_length: 30

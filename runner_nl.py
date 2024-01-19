@@ -51,12 +51,12 @@ class NoamOpt:
     def rate(self, step = None):
         if step is None:  
             step = self._step  
-        return self.factor * (self.model_size ** (-0.5) * min(step ** (-0.5), step * self.warmup ** (-1.5)))  
+        return self.factor * (self.model_size ** (-0.5) * min(step ** (-0.5), step * self.warmup ** (-1.5)))
 
 
 
 
-class ModelRunner():
+class ModelRunnerNL():
     def __init__(
             self, 
             exp_name, 
@@ -162,8 +162,8 @@ class ModelRunner():
     def load_training_states(self):
         optimizer_ckpt_list = sorted(glob(os.path.join(self.exp_path, 'ckpts', 'optimizer_*.pth')))
         if len(optimizer_ckpt_list) > 0:
-            optimizer_ckptckpt = torch.load(optimizer_ckpt_list[-1], map_location=self.device)
-            self.optimizer.load_state_dict(optimizer_ckptckpt)
+            optimizer_ckpt = torch.load(optimizer_ckpt_list[-1], map_location=self.device)
+            self.optimizer.load_state_dict(optimizer_ckpt)
 
     def save_training_states(self, iter_step):
         os.makedirs(os.path.join(self.exp_path, 'ckpts'), exist_ok=True)
@@ -191,7 +191,7 @@ class ModelRunner():
 
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, betas=(0.9, 0.98), eps=1e-9)
 
-        self.scheduler = NoamOpt(self.optimizer, d_model=768, warmup=self.warmup_steps)
+        #self.scheduler = NoamOpt(self.optimizer, d_model=768, warmup=self.warmup_steps)
 
         self.load_training_states()
         #self.lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, )
@@ -214,7 +214,7 @@ class ModelRunner():
             self.writer = SummaryWriter(log_dir=os.path.join(self.exp_path, 'logs'))
 
     def testing_setup(self):
-        self.dataset = CatDogTestDataset(self.data_paths, self.target_size)
+        self.dataset = globals()[self.test_dataset_builder](self.data_paths)
 
     def save_configuration(self):
         cur_exp_config = {
@@ -255,7 +255,7 @@ class ModelRunner():
                 self.model.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-                self.scheduler.step()
+                #self.scheduler.step()
                 self.iter_count += cur_batch
 
                 # log the training loss
@@ -279,10 +279,15 @@ class ModelRunner():
         self.save_configuration()
         self.model.train()
         train_dataloader = DataLoader(dataset=self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=8, pin_memory=True)
-        val_dataloader = DataLoader(dataset=self.val_dataset, batch_size=self.batch_size, shuffle=True, num_workers=8, pin_memory=True)
+        if self.validation_freq:
+            val_dataloader = DataLoader(dataset=self.val_dataset, batch_size=self.batch_size, shuffle=True, num_workers=8, pin_memory=True)
 
         print('Start training.')
-        print('{} data as train, {} as validation.'.format(len(self.train_dataset), len(self.val_dataset)))
+        if self.validation_freq:
+            print('{} data as train, {} as validation.'.format(len(self.train_dataset), len(self.val_dataset)))
+        else:
+            print('{} data as train, no validation.'.format(len(self.train_dataset)))
+
         self.iter_count = self.last_iter_count
         iter_bar = tqdm(range(self.max_epoch * len(self.train_dataset)), initial=self.iter_count, dynamic_ncols=True)
         
@@ -325,14 +330,13 @@ class ModelRunner():
         tqdm.write('Complete training.')
 
     @torch.no_grad()
-    def predict(self, data: np.ndarray) -> Union[int, Sequence[int]]:
+    def predict(self, data_tokens: torch.Tensor, data_mask: torch.Tensor) -> Union[int, Sequence[int]]:
         self.model.eval()
 
-        if len(data.shape) == 3:
-            data = data[None, ...]
+        data_tokens = data_tokens.to(self.device)
+        data_mask = data_mask.to(self.device)
 
-        data = torch.tensor(data, dtype=torch.float32, device=self.device)
-        predicted : np.ndarray = self.model(data).cpu().numpy().tolist()
+        predicted : np.ndarray = self.model(data_tokens, data_mask).cpu().numpy()
         predicted = np.argmax(predicted, axis=-1)
         predicted_list = predicted.tolist()
 
@@ -382,7 +386,7 @@ if __name__ == '__main__':
 
     mp.set_start_method('spawn', force=True)
 
-    runner = ModelRunner(
+    runner = ModelRunnerNL(
         exp_name=args.exp_name, 
         config_path=args.config_path, 
         data_paths=args.data_paths, 
